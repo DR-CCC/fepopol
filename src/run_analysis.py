@@ -12,9 +12,12 @@ from portfolio_analysis import (
     normality_summary,
     optimize_max_sharpe,
     optimize_min_volatility,
+    save_asset_risk_return_chart,
     save_frontier_chart,
     save_normality_charts,
+    save_normality_pvalue_chart,
     save_simulation_chart,
+    save_weights_comparison_chart,
     simulate_portfolios,
 )
 
@@ -96,6 +99,9 @@ Most financial return series are expected to reject normality because daily retu
 
 - `outputs/charts/portfolio_simulation.png`
 - `outputs/charts/efficient_frontier_cml.png`
+- `outputs/charts/optimized_weights_comparison.png`
+- `outputs/charts/normality_pvalues.png`
+- `outputs/charts/asset_risk_return.png`
 - `outputs/charts/normality_<TICKER>.png`
 """
     report_path.write_text(text, encoding="utf-8")
@@ -117,6 +123,7 @@ def main() -> None:
     normality = normality_summary(returns)
     normality.to_csv(tables_dir / "normality_tests.csv", index=False)
     save_normality_charts(returns, charts_dir)
+    save_normality_pvalue_chart(normality, charts_dir / "normality_pvalues.png")
 
     simulated = simulate_portfolios(returns, count=10_000, risk_free_rate=RISK_FREE_RATE, max_weight=MAX_WEIGHT)
     simulated.to_csv(tables_dir / "portfolio_simulation.csv", index=False)
@@ -135,6 +142,9 @@ def main() -> None:
         charts_dir / "efficient_frontier_cml.png",
         risk_free_rate=RISK_FREE_RATE,
     )
+    save_weights_comparison_chart(TICKERS, max_sharpe, min_vol, charts_dir / "optimized_weights_comparison.png")
+    asset_metrics = save_asset_risk_return_chart(returns, charts_dir / "asset_risk_return.png")
+    asset_metrics.to_csv(tables_dir / "asset_metrics.csv", index=False)
 
     portfolios = pd.concat(
         [weights_table(max_sharpe, TICKERS), weights_table(min_vol, TICKERS)],

@@ -302,3 +302,91 @@ def save_frontier_chart(
     fig.tight_layout()
     fig.savefig(output_path, dpi=180)
     plt.close(fig)
+
+
+def save_weights_comparison_chart(
+    tickers: list[str],
+    max_sharpe: PortfolioResult,
+    min_vol: PortfolioResult,
+    output_path: Path,
+) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    x_positions = np.arange(len(tickers))
+    bar_width = 0.38
+
+    fig, ax = plt.subplots(figsize=(10, 5.5))
+    ax.bar(
+        x_positions - bar_width / 2,
+        max_sharpe.weights,
+        width=bar_width,
+        label="Maximum Sharpe",
+        color="#4C78A8",
+    )
+    ax.bar(
+        x_positions + bar_width / 2,
+        min_vol.weights,
+        width=bar_width,
+        label="Minimum Volatility",
+        color="#54A24B",
+    )
+    ax.axhline(0.40, color="#E45756", linestyle="--", linewidth=1.4, label="Weight cap 40%")
+    ax.set_title("Optimized Portfolio Weights")
+    ax.set_xlabel("Asset")
+    ax.set_ylabel("Portfolio weight")
+    ax.set_xticks(x_positions)
+    ax.set_xticklabels(tickers)
+    ax.set_ylim(0, 0.45)
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda value, _: f"{value:.0%}"))
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=180)
+    plt.close(fig)
+
+
+def save_normality_pvalue_chart(normality: pd.DataFrame, output_path: Path) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    plot_data = normality.sort_values("normaltest_pvalue", ascending=False).copy()
+    plot_data["minus_log10_pvalue"] = -np.log10(plot_data["normaltest_pvalue"].clip(lower=1e-300))
+    rejection_line = -np.log10(0.05)
+
+    fig, ax = plt.subplots(figsize=(9, 5.5))
+    ax.bar(plot_data["ticker"], plot_data["minus_log10_pvalue"], color="#F58518")
+    ax.axhline(rejection_line, color="#E45756", linestyle="--", linewidth=1.8, label="5% rejection threshold")
+    ax.set_title("Normality Test Summary")
+    ax.set_xlabel("Asset")
+    ax.set_ylabel("-log10(p-value)")
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=180)
+    plt.close(fig)
+
+
+def save_asset_risk_return_chart(returns: pd.DataFrame, output_path: Path) -> pd.DataFrame:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    rows: list[dict[str, float | str]] = []
+    for ticker in returns.columns:
+        series = returns[ticker].dropna()
+        annual_return = float(series.mean() * TRADING_DAYS)
+        annual_volatility = float(series.std(ddof=1) * np.sqrt(TRADING_DAYS))
+        rows.append({"ticker": ticker, "annual_return": annual_return, "annual_volatility": annual_volatility})
+
+    asset_metrics = pd.DataFrame(rows)
+    fig, ax = plt.subplots(figsize=(9, 6))
+    ax.scatter(asset_metrics["annual_volatility"], asset_metrics["annual_return"], s=95, color="#4C78A8")
+    for _, row in asset_metrics.iterrows():
+        ax.annotate(
+            row["ticker"],
+            (row["annual_volatility"], row["annual_return"]),
+            xytext=(6, 5),
+            textcoords="offset points",
+            fontsize=9,
+        )
+    ax.set_title("Individual Asset Risk-Return Profile")
+    ax.set_xlabel("Annualized volatility")
+    ax.set_ylabel("Annualized return")
+    ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda value, _: f"{value:.0%}"))
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda value, _: f"{value:.0%}"))
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=180)
+    plt.close(fig)
+    return asset_metrics
