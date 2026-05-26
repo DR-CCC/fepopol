@@ -8,9 +8,11 @@ import yfinance as yf
 
 from portfolio_analysis import (
     compute_log_returns,
+    efficient_frontier,
     normality_summary,
     optimize_max_sharpe,
     optimize_min_volatility,
+    save_frontier_chart,
     save_normality_charts,
     save_simulation_chart,
     simulate_portfolios,
@@ -93,6 +95,7 @@ Most financial return series are expected to reject normality because daily retu
 ## Generated Charts
 
 - `outputs/charts/portfolio_simulation.png`
+- `outputs/charts/efficient_frontier_cml.png`
 - `outputs/charts/normality_<TICKER>.png`
 """
     report_path.write_text(text, encoding="utf-8")
@@ -121,6 +124,17 @@ def main() -> None:
 
     max_sharpe = optimize_max_sharpe(returns, risk_free_rate=RISK_FREE_RATE, max_weight=MAX_WEIGHT)
     min_vol = optimize_min_volatility(returns, risk_free_rate=RISK_FREE_RATE, max_weight=MAX_WEIGHT)
+
+    frontier = efficient_frontier(returns, points=40, risk_free_rate=RISK_FREE_RATE, max_weight=MAX_WEIGHT)
+    frontier.to_csv(tables_dir / "efficient_frontier.csv", index=False)
+    save_frontier_chart(
+        simulated,
+        frontier,
+        max_sharpe,
+        min_vol,
+        charts_dir / "efficient_frontier_cml.png",
+        risk_free_rate=RISK_FREE_RATE,
+    )
 
     portfolios = pd.concat(
         [weights_table(max_sharpe, TICKERS), weights_table(min_vol, TICKERS)],

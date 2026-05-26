@@ -4,6 +4,7 @@ import pandas as pd
 from src.portfolio_analysis import (
     annualized_portfolio_metrics,
     compute_log_returns,
+    efficient_frontier,
     normality_summary,
     optimize_max_sharpe,
     optimize_min_volatility,
@@ -105,3 +106,17 @@ def test_simulate_portfolios_returns_requested_count_and_valid_weights():
     for _, row in simulated.iterrows():
         weights = row[["A", "B", "C", "D", "E"]].to_numpy(dtype=float)
         assert validate_weights(weights, max_weight=0.40)
+
+
+def test_efficient_frontier_returns_monotonic_targets():
+    rng = np.random.default_rng(15)
+    returns = pd.DataFrame(
+        rng.normal(0.0004, 0.010, size=(140, 5)),
+        columns=["A", "B", "C", "D", "E"],
+    )
+
+    frontier = efficient_frontier(returns, points=8, risk_free_rate=0.01, max_weight=0.40)
+
+    assert frontier.shape[0] >= 3
+    assert {"target_return", "volatility", "sharpe"}.issubset(frontier.columns)
+    assert frontier["target_return"].is_monotonic_increasing

@@ -201,3 +201,104 @@ def save_simulation_chart(simulated: pd.DataFrame, output_path: Path) -> None:
     fig.tight_layout()
     fig.savefig(output_path, dpi=180)
     plt.close(fig)
+
+
+def efficient_frontier(
+    returns: pd.DataFrame,
+    points: int = 40,
+    risk_free_rate: float = 0.01,
+    max_weight: float = 0.40,
+) -> pd.DataFrame:
+    asset_count = len(returns.columns)
+    asset_annual_returns = returns.mean().to_numpy() * TRADING_DAYS
+    min_target = float(np.min(asset_annual_returns))
+    max_target = float(np.max(asset_annual_returns))
+    targets = np.linspace(min_target, max_target, points)
+    rows: list[dict[str, float]] = []
+
+    for target in targets:
+        constraints = (
+            _sum_to_one_constraint(),
+            {
+                "type": "eq",
+                "fun": lambda weights, target=target: (returns.mean().to_numpy() * TRADING_DAYS) @ weights
+                - target,
+            },
+        )
+
+        result = optimize.minimize(
+            lambda weights: annualized_portfolio_metrics(returns, weights, risk_free_rate)["volatility"],
+            _initial_weights(asset_count),
+            method="SLSQP",
+            bounds=_bounds(asset_count, max_weight),
+            constraints=constraints,
+        )
+        if result.success:
+            weights = np.asarray(result.x)
+            metrics = annualized_portfolio_metrics(returns, weights, risk_free_rate)
+            row = {
+                "target_return": target,
+                "return": metrics["return"],
+                "volatility": metrics["volatility"],
+                "sharpe": metrics["sharpe"],
+            }
+            row.update({ticker: float(weight) for ticker, weight in zip(returns.columns, weights)})
+            rows.append(row)
+
+    if not rows:
+        raise RuntimeError("efficient frontier optimization failed for all target returns")
+    return pd.DataFrame(rows).sort_values("target_return").reset_index(drop=True)
+
+
+def save_frontier_chart(
+    simulated: pd.DataFrame,
+    frontier: pd.DataFrame,
+    max_sharpe: PortfolioResult,
+    min_vol: PortfolioResult,
+    output_path: Path,
+    risk_free_rate: float = 0.01,
+) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig, ax = plt.subplots(figsize=(9, 6))
+    scatter = ax.scatter(
+        simulated["volatility"],
+        simulated["return"],
+        c=simulated["sharpe"],
+        cmap="viridis",
+        s=10,
+        alpha=0.35,
+        label="Simulated portfolios",
+    )
+    ax.plot(frontier["volatility"], frontier["return"], color="#E45756", linewidth=2.5, label="Efficient frontier")
+    ax.scatter(
+        max_sharpe.annual_volatility,
+        max_sharpe.annual_return,
+        marker="*",
+        s=260,
+        color="#F2CF5B",
+        edgecolor="black",
+        label="Max Sharpe",
+    )
+    ax.scatter(
+        min_vol.annual_volatility,
+        min_vol.annual_return,
+        marker="D",
+        s=110,
+        color="#54A24B",
+        edgecolor="black",
+        label="Min Volatility",
+    )
+
+    cml_x = np.linspace(0, max(frontier["volatility"].max(), max_sharpe.annual_volatility) * 1.05, 100)
+    cml_slope = (max_sharpe.annual_return - risk_free_rate) / max_sharpe.annual_volatility
+    cml_y = risk_free_rate + cml_slope * cml_x
+    ax.plot(cml_x, cml_y, color="#B279A2", linestyle="--", linewidth=2, label="Capital market line")
+
+    ax.set_title("Efficient Frontier and Capital Market Line")
+    ax.set_xlabel("Annualized volatility")
+    ax.set_ylabel("Annualized return")
+    fig.colorbar(scatter, ax=ax, label="Sharpe ratio")
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=180)
+    plt.close(fig)
