@@ -7,6 +7,7 @@ from src.portfolio_analysis import (
     normality_summary,
     optimize_max_sharpe,
     optimize_min_volatility,
+    simulate_portfolios,
     validate_weights,
 )
 
@@ -88,3 +89,19 @@ def test_optimizers_respect_weight_cap_and_sum_to_one():
 
     assert validate_weights(max_sharpe.weights, max_weight=0.40)
     assert validate_weights(min_vol.weights, max_weight=0.40)
+
+
+def test_simulate_portfolios_returns_requested_count_and_valid_weights():
+    rng = np.random.default_rng(11)
+    returns = pd.DataFrame(
+        rng.normal(0.0004, 0.012, size=(80, 5)),
+        columns=["A", "B", "C", "D", "E"],
+    )
+
+    simulated = simulate_portfolios(returns, count=25, risk_free_rate=0.01, max_weight=0.40, seed=123)
+
+    assert simulated.shape[0] == 25
+    assert {"return", "volatility", "sharpe"}.issubset(simulated.columns)
+    for _, row in simulated.iterrows():
+        weights = row[["A", "B", "C", "D", "E"]].to_numpy(dtype=float)
+        assert validate_weights(weights, max_weight=0.40)
