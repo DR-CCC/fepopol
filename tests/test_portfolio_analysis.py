@@ -4,6 +4,9 @@ import pandas as pd
 from src.portfolio_analysis import (
     annualized_portfolio_metrics,
     compute_log_returns,
+    normality_summary,
+    optimize_max_sharpe,
+    optimize_min_volatility,
     validate_weights,
 )
 
@@ -46,3 +49,42 @@ def test_annualized_portfolio_metrics_matches_manual_calculation():
     assert np.isclose(metrics["return"], expected_return)
     assert np.isclose(metrics["volatility"], expected_volatility)
     assert np.isclose(metrics["sharpe"], expected_sharpe)
+
+
+def test_normality_summary_contains_expected_columns():
+    returns = pd.DataFrame(
+        {
+            "AAPL": np.linspace(-0.02, 0.02, 40),
+            "MSFT": np.linspace(0.02, -0.02, 40),
+        }
+    )
+
+    summary = normality_summary(returns)
+
+    assert list(summary.columns) == [
+        "ticker",
+        "observations",
+        "mean",
+        "std",
+        "skewness",
+        "kurtosis",
+        "skew_pvalue",
+        "kurtosis_pvalue",
+        "normaltest_pvalue",
+        "reject_normality_5pct",
+    ]
+    assert set(summary["ticker"]) == {"AAPL", "MSFT"}
+
+
+def test_optimizers_respect_weight_cap_and_sum_to_one():
+    rng = np.random.default_rng(7)
+    returns = pd.DataFrame(
+        rng.normal(0.0005, 0.01, size=(120, 4)),
+        columns=["A", "B", "C", "D"],
+    )
+
+    max_sharpe = optimize_max_sharpe(returns, risk_free_rate=0.01, max_weight=0.40)
+    min_vol = optimize_min_volatility(returns, risk_free_rate=0.01, max_weight=0.40)
+
+    assert validate_weights(max_sharpe.weights, max_weight=0.40)
+    assert validate_weights(min_vol.weights, max_weight=0.40)
